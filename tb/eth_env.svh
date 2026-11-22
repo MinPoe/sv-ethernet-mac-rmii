@@ -28,10 +28,12 @@ class eth_env extends uvm_env;
     regs.mon.ap.connect(scb.reg_imp);
 
     // RX path: RMII input -> model -> scb expected; AXI-Stream output -> scb actual
+    rmii.drv.ap.connect(model.rx_imp);
     model.rx_exp_ap.connect(scb.rx_exp_imp);
     rx.mon.ap.connect(scb.rx_act_imp);
 
     // TX path: AXI-Stream input -> model -> scb expected; RMII output -> scb actual
+    tx.drv.ap.connect(model.tx_imp);
     model.tx_exp_ap.connect(scb.tx_exp_imp);
     rmii.tx_mon.ap.connect(scb.tx_act_imp);
 

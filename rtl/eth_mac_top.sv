@@ -49,6 +49,7 @@ module eth_mac_top (
   // internal RX byte stream
   logic [7:0] rx_line_data;
   logic rx_line_valid;
+  logic rx_line_active;
 
 
   /* registers */
@@ -88,13 +89,15 @@ module eth_mac_top (
     .clk, .rst_n,
     .rxd, .crs_dv,
     .line_data(rx_line_data),
-    .line_valid(rx_line_valid)
+    .line_valid(rx_line_valid),
+    .line_active(rx_line_active)
   );
 
   rx_ctrl u_rx_ctrl (
     .clk, .rst_n,
     .line_valid(rx_line_valid),
     .line_data(rx_line_data),
+    .line_active(rx_line_active),
     .m_tdata, .m_tvalid, .m_tready, .m_tlast, .m_tuser,
     .enable(rx_enable),
     .promisc,

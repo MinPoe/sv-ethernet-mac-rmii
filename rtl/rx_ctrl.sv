@@ -11,6 +11,7 @@ module rx_ctrl (
   // byte stream from rmii_rx
   input logic line_valid,
   input logic [7:0] line_data,
+  input logic line_active, // high for entire frame
 
   // AXI-Stream output (user side)
   output logic [7:0] m_tdata,
@@ -57,16 +58,16 @@ module rx_ctrl (
   typedef enum logic [1:0] {S_IDLE, S_PRE, S_BODY, S_IGN} st_e;
 
   st_e st;
-  logic line_valid_d;
+  logic line_active_d;
   logic [12:0] blen; // body bytes seen
   logic [31:0] crc;
   logic store_ok;
-  logic wr_ptr, rd_ptr;
-  logic [1:0] cnt; // committed unread buffers
+  logic [2:0] wr_ptr, rd_ptr;
+  logic [3:0] cnt; // committed unread buffers
 
-  logic [7:0] mem [0:1][0:BUF_BYTES-1];
-  logic [10:0] plen [0:1];
-  logic ubit [0:1];
+  logic [7:0] mem [0:7][0:BUF_BYTES-1];
+  logic [10:0] plen [0:7];
+  logic ubit [0:7];
 
   // address match
   logic [47:0] rx_da;
@@ -76,7 +77,7 @@ module rx_ctrl (
                     (rx_da == 48'hFFFF_FFFF_FFFF);
 
   logic eof;
-  assign eof = line_valid_d && !line_valid;
+  assign eof = line_active_d && !line_active;
 
 
   /* end-of-frame decision */
@@ -126,11 +127,11 @@ module rx_ctrl (
     if (!rst_n) begin
       out_busy <= 1'b0;
       idx <= 11'd0;
-      rd_ptr <= 1'b0;
+      rd_ptr <= 3'd0;
     end
 
     else if (!out_busy) begin
-      if (cnt != 2'd0) begin
+      if (cnt != 4'd0) begin
         out_busy <= 1'b1;
         idx <= 11'd0;
       end
@@ -139,7 +140,7 @@ module rx_ctrl (
     else if (advance) begin
       if (last_beat) begin
         out_busy <= 1'b0;
-        rd_ptr <= ~rd_ptr;
+        rd_ptr <= rd_ptr + 3'd1;
       end
 
       else
@@ -150,9 +151,9 @@ module rx_ctrl (
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n)
-      cnt <= 2'd0;
+      cnt <= 4'd0;
     else
-      cnt <= cnt + {1'b0, commit} - {1'b0, release_buf};
+      cnt <= cnt + {3'b0, commit} - {3'b0, release_buf};
   end
 
 
@@ -165,17 +166,17 @@ module rx_ctrl (
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       st <= S_IDLE;
-      line_valid_d <= 1'b0;
+      line_active_d <= 1'b0;
       blen <= 13'd0;
       crc <= CRC_INIT;
       store_ok <= 1'b0;
-      wr_ptr <= 1'b0;
+      wr_ptr <= 3'd0;
       rx_da <= 48'd0;
     end
 
     else begin
-      line_valid_d <= line_valid;
-      if (commit) wr_ptr <= ~wr_ptr;
+      line_active_d <= line_active;
+      if (commit) wr_ptr <= wr_ptr + 3'd1;
       if (eof) st <= S_IDLE;
 
       if (line_valid) begin
@@ -185,7 +186,7 @@ module rx_ctrl (
               st <= S_PRE;
               blen <= 13'd0;
               crc <= CRC_INIT;
-              store_ok <= (cnt != 2'd2);
+              store_ok <= (cnt != 4'd8);
               rx_da <= 48'd0;
             end
 

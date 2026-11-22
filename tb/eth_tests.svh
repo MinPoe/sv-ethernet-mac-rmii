@@ -3,6 +3,7 @@ class eth_base_test extends uvm_test;
   eth_env env;
   eth_cfg cfg;
   virtual rmii_if rmii_vif;
+  virtual axis_if axis_rx_vif;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -14,6 +15,8 @@ class eth_base_test extends uvm_test;
     env = eth_env::type_id::create("env", this);
     if (!uvm_config_db#(virtual rmii_if)::get(this, "", "rmii_vif", rmii_vif))
       `uvm_fatal("NOVIF", "rmii_vif")
+    if (!uvm_config_db#(virtual axis_if)::get(this, "", "axis_rx_vif", axis_rx_vif))
+      `uvm_fatal("NOVIF", "axis_rx_vif")
   endfunction
 
   task cfg_regs(bit tx_en, bit rx_en, bit promisc = 0);
@@ -38,7 +41,7 @@ class eth_base_test extends uvm_test;
     int unsigned quiet = 0;
     while (quiet < 200) begin
       @(posedge rmii_vif.clk);
-      if (rmii_vif.tx_en || rmii_vif.crs_dv) quiet = 0;
+      if (rmii_vif.tx_en || rmii_vif.crs_dv || axis_rx_vif.tvalid) quiet = 0;
       else quiet++;
     end
   endtask

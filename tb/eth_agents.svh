@@ -4,12 +4,14 @@
 class rmii_rx_driver extends uvm_driver #(rx_frame);
   `uvm_component_utils(rmii_rx_driver)
   virtual rmii_if vif;
+  uvm_analysis_port #(rx_frame) ap;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
   endfunction
 
   function void build_phase(uvm_phase phase);
+    ap = new("ap", this);
     if (!uvm_config_db#(virtual rmii_if)::get(this, "", "rmii_vif", vif))
       `uvm_fatal("NOVIF", "rmii_vif not set")
   endfunction
@@ -18,6 +20,7 @@ class rmii_rx_driver extends uvm_driver #(rx_frame);
   task drive_byte(byte unsigned b);
     for (int i = 0; i < 4; i++) begin
       @(negedge vif.clk);
+      vif.crs_dv = 1'b1;
       vif.rxd = b[1:0];
       b = b >> 2;
     end
@@ -31,17 +34,17 @@ class rmii_rx_driver extends uvm_driver #(rx_frame);
       req.build();
 
       // drive frame bytes as RMII dibits
-      @(negedge vif.clk);
-      vif.crs_dv = 1'b1;
       foreach (req.wbytes[i]) begin
         drive_byte(req.wbytes[i]);
       end
+
+      ap.write(req); // notify model before IFG so expected frame is queued first
 
       // IFG
       @(negedge vif.clk);
       vif.crs_dv = 1'b0;
       vif.rxd = 2'd0;
-      repeat (req.ifg * 4 - 1) @(negedge vif.clk); // ifg in byte-times -> clock cycles
+      repeat (req.ifg * 4 - 1) @(negedge vif.clk);
 
       seq_item_port.item_done();
     end
@@ -145,12 +148,14 @@ endclass
 class axis_tx_driver extends uvm_driver #(tx_frame);
   `uvm_component_utils(axis_tx_driver)
   virtual axis_if vif;
+  uvm_analysis_port #(tx_frame) ap;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
   endfunction
 
   function void build_phase(uvm_phase phase);
+    ap = new("ap", this);
     if (!uvm_config_db#(virtual axis_if)::get(this, "", "axis_tx_vif", vif))
       `uvm_fatal("NOVIF", "axis_tx_vif not set")
   endfunction
@@ -178,6 +183,7 @@ class axis_tx_driver extends uvm_driver #(tx_frame);
       @(negedge vif.clk);
       vif.tvalid = 1'b0;
       vif.tlast = 1'b0;
+      ap.write(req);
       seq_item_port.item_done();
     end
   endtask

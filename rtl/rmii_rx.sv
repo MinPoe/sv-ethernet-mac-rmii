@@ -12,11 +12,14 @@ module rmii_rx (
 
   // byte stream to rx_ctrl
   output logic [7:0] line_data,
-  output logic line_valid
+  output logic line_valid,
+  output logic line_active // high for entire frame
 );
 
   logic [7:0] sr;
   logic [1:0] cnt; // dibit counter 0..3
+
+  assign line_active = active;
   logic active;
 
 
