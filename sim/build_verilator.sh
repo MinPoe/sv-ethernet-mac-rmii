@@ -16,6 +16,7 @@ SEED="${2:-1}"
 mkdir -p "$OUT"
 
 verilator --binary --timing --assert --timescale 1ns/1ps \
+  --coverage \
   -Wno-fatal -Wno-lint -Wno-style \
   -CFLAGS "-std=c++20 -fcoroutines" \
   -j "${VL_JOBS:-2}" \

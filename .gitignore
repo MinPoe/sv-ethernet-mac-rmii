@@ -1,2 +1,6 @@
 sim/obj/
+sim/work/
 tb/tb_top_debug.sv
+*.dat
+coverage_*/
+transcript

@@ -37,6 +37,9 @@ class eth_env extends uvm_env;
     model.tx_exp_ap.connect(scb.tx_exp_imp);
     rmii.tx_mon.ap.connect(scb.tx_act_imp);
 
+    // coverage collector
+    rmii.drv.ap.connect(cov.analysis_export);
+
     scb.model = model;
   endfunction
 endclass

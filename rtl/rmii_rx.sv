@@ -18,9 +18,9 @@ module rmii_rx (
 
   logic [7:0] sr;
   logic [1:0] cnt; // dibit counter 0..3
+  logic active;
 
   assign line_active = active;
-  logic active;
 
 
   /* fsm */
