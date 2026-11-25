@@ -65,7 +65,7 @@ module rx_ctrl (
   logic [2:0] wr_ptr, rd_ptr;
   logic [3:0] cnt; // committed unread buffers
 
-  logic [7:0] mem [0:7][0:BUF_BYTES-1];
+  (* ramstyle = "M10K" *) logic [7:0] mem [0:8*BUF_BYTES-1];
   logic [10:0] plen [0:7];
   logic ubit [0:7];
 
@@ -106,47 +106,73 @@ module rx_ctrl (
   assign commit_user = (crc != CRC_RESIDUE);
 
 
-  /* reader */
+  /* reader - 1-cycle BRAM read latency pipeline
+   * IDLE: wait for cnt != 0, then issue first address (idx=0), go to FETCH
+   * FETCH: BRAM read in progress, data arrives next cycle, go to PIPE
+   * PIPE: data valid on rd_data, present on AXI-Stream, wait for tready
+   */
   logic out_busy;
   logic [10:0] idx;
   logic release_buf;
+  logic pipe_valid; // data on rd_data is valid
+  logic pipe_last;
+  logic pipe_user;
+  logic [7:0] rd_data;
 
-  assign m_tvalid = out_busy;
-  assign m_tdata = mem[rd_ptr][idx];
-  assign m_tuser = ubit[rd_ptr];
-  assign m_tlast = out_busy && (idx == plen[rd_ptr] - 11'd1);
-
-  logic advance;
-  assign advance = out_busy && m_tready;
-
-  logic last_beat;
-  assign last_beat = advance && (idx == plen[rd_ptr] - 11'd1);
-  assign release_buf = last_beat;
+  assign m_tvalid = pipe_valid;
+  assign m_tdata = rd_data;
+  assign m_tuser = pipe_user;
+  assign m_tlast = pipe_last;
+  assign release_buf = pipe_valid && m_tready && pipe_last;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       out_busy <= 1'b0;
+      pipe_valid <= 1'b0;
+      pipe_last <= 1'b0;
+      pipe_user <= 1'b0;
       idx <= 11'd0;
       rd_ptr <= 3'd0;
     end
 
     else if (!out_busy) begin
+      // start new buffer readout
+      pipe_valid <= 1'b0;
       if (cnt != 4'd0) begin
         out_busy <= 1'b1;
-        idx <= 11'd0;
+        idx <= 11'd0; // address issued now, data arrives next cycle
       end
     end
 
-    else if (advance) begin
-      if (last_beat) begin
+    else if (!pipe_valid) begin
+      // BRAM data has arrived, present it
+      pipe_valid <= 1'b1;
+      pipe_last <= (idx == plen[rd_ptr] - 11'd1);
+      pipe_user <= ubit[rd_ptr];
+    end
+
+    else if (m_tready) begin
+      // consumer accepted this beat
+      if (pipe_last) begin
+        // buffer done
         out_busy <= 1'b0;
+        pipe_valid <= 1'b0;
+        pipe_last <= 1'b0;
         rd_ptr <= rd_ptr + 3'd1;
       end
 
-      else
+      else begin
+        // issue next address, deassert valid for 1 BRAM cycle
         idx <= idx + 11'd1;
+        pipe_valid <= 1'b0;
+      end
     end
 
+  end
+
+  // registered BRAM read
+  always_ff @(posedge clk) begin
+    rd_data <= mem[rd_addr];
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -162,6 +188,10 @@ module rx_ctrl (
   logic [10:0] waddr;
   assign waddr_full = blen - 13'd14;
   assign waddr = waddr_full[10:0];
+
+  logic [13:0] rd_addr, wr_full_addr;
+  assign rd_addr = {rd_ptr, idx};
+  assign wr_full_addr = {wr_ptr, waddr};
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -210,7 +240,7 @@ module rx_ctrl (
               rx_da <= {line_data, rx_da[47:8]};
 
             if (store_ok && blen >= 13'd14 && waddr_full < BUF_BYTES[12:0])
-              mem[wr_ptr][waddr] <= line_data;
+              mem[wr_full_addr] <= line_data;
           end
 
           default: ;

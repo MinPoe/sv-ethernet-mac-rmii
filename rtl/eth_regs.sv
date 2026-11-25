@@ -73,7 +73,15 @@ module eth_regs (
 
   /* counters */
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || clr) begin
+    if (!rst_n) begin
+      tx_frames <= 32'd0;
+      rx_frames <= 32'd0;
+      rx_fcs_err <= 32'd0;
+      rx_dropped <= 32'd0;
+      rx_fifo_ovf <= 32'd0;
+    end
+
+    else if (clr) begin
       tx_frames <= 32'd0;
       rx_frames <= 32'd0;
       rx_fcs_err <= 32'd0;
