@@ -35,4 +35,11 @@ verilator --binary --timing --assert --timescale 1ns/1ps \
   "$TB/eth_pkg.sv" \
   "$TB/tb_top.sv"
 
-"$OUT/sim" +UVM_TESTNAME="$TEST" +UVM_SEED="$SEED"
+LOG="$OUT/sim.log"
+RC=0
+"$OUT/sim" +UVM_TESTNAME="$TEST" +verilator+seed+"$SEED" 2>&1 | tee "$LOG" || RC=$?
+
+if [ "$RC" -ne 0 ] || grep -qE 'UVM_(ERROR|FATAL)\s*:\s*[1-9]' "$LOG"; then
+  echo "FAIL: $TEST (seed $SEED)" >&2
+  exit 1
+fi
