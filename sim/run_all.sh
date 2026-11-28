@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Run all UVM tests and merge functional coverage
+# Run all UVM tests over multiple seeds and merge functional coverage
+# usage: N_SEEDS=10 bash sim/run_all.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SIM="$ROOT/sim/obj/sim"
 COV_DIR="$ROOT/sim/cov"
 LOG_DIR="$ROOT/sim/logs"
+N_SEEDS="${N_SEEDS:-5}"
 
 TESTS=(
   eth_rx_rand_test
@@ -31,31 +33,44 @@ COV_FILES=()
 FAIL_LIST=()
 
 for t in "${TESTS[@]}"; do
-  echo "--- $t ---"
-  COV_FILE="$COV_DIR/${t}.dat"
-  LOG="$LOG_DIR/${t}.log"
-  RC=0
-  "$SIM" +UVM_TESTNAME="$t" +verilator+coverage+file+"$COV_FILE" >"$LOG" 2>&1 || RC=$?
+  echo "--- $t ($N_SEEDS seeds) ---"
+  T_FAIL=()
 
-  if [ "$RC" -ne 0 ] || grep -qE 'UVM_(ERROR|FATAL)\s*:\s*[1-9]' "$LOG"; then
-    tail -5 "$LOG"
-    echo "FAIL (rc=$RC)"
-    FAIL=$((FAIL + 1))
-    FAIL_LIST+=("$t")
+  for s in $(seq 1 "$N_SEEDS"); do
+    COV_FILE="$COV_DIR/${t}_s${s}.dat"
+    LOG="$LOG_DIR/${t}_s${s}.log"
+    RC=0
+    "$SIM" +UVM_TESTNAME="$t" +verilator+seed+"$s" \
+      +verilator+coverage+file+"$COV_FILE" >"$LOG" 2>&1 || RC=$?
+
+    if [ "$RC" -ne 0 ] || grep -qE 'UVM_(ERROR|FATAL)\s*:\s*[1-9]' "$LOG"; then
+      T_FAIL+=("$s")
+    fi
+
+    if [ -f "$COV_FILE" ]; then
+      COV_FILES+=("$COV_FILE")
+    fi
+  done
+
+  if [ ${#T_FAIL[@]} -gt 0 ]; then
+    echo "  FAIL seeds: ${T_FAIL[*]}"
+    FAIL=$((FAIL + ${#T_FAIL[@]}))
+    for s in "${T_FAIL[@]}"; do
+      FAIL_LIST+=("${t}:s${s}")
+    done
   else
-    tail -3 "$LOG"
-    PASS=$((PASS + 1))
+    echo "  all $N_SEEDS seeds passed"
   fi
 
-  if [ -f "$COV_FILE" ]; then
-    COV_FILES+=("$COV_FILE")
-  fi
+  PASS=$((PASS + N_SEEDS - ${#T_FAIL[@]}))
   echo ""
 done
 
-echo "=== Results: $PASS passed, $FAIL failed ==="
+TOTAL=$((PASS + FAIL))
+echo "=== Results: $PASS/$TOTAL passed, $FAIL failed (${#TESTS[@]} tests x $N_SEEDS seeds) ==="
 if [ ${#FAIL_LIST[@]} -gt 0 ]; then
-  echo "FAILED: ${FAIL_LIST[*]}"
+  echo "FAILED:"
+  printf '  %s\n' "${FAIL_LIST[@]}"
 fi
 
 if [ ${#COV_FILES[@]} -gt 0 ]; then
