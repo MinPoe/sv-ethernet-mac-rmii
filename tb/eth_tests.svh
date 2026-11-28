@@ -145,8 +145,14 @@ class eth_rx_bp_test extends eth_base_test;
     s.start(env.rmii.sqr);
     wait_idle();
 
-    cfg.bp_mode = BP_BURSTY;
+    cfg.bp_mode = BP_RAND10;
     s = rx_rand_seq::type_id::create("s2");
+    s.n = 8; // few frames to avoid FIFO overflow at 10% tready
+    s.start(env.rmii.sqr);
+    wait_idle();
+
+    cfg.bp_mode = BP_BURSTY;
+    s = rx_rand_seq::type_id::create("s3");
     s.n = 40;
     s.start(env.rmii.sqr);
   endtask

@@ -16,7 +16,27 @@ class eth_cov extends uvm_subscriber #(rx_frame);
       bins l_over = {[1519:$]};
     }
     cp_bp : coverpoint bp;
-    x_len_err : cross cp_len, cp_err;
+
+    x_len_err : cross cp_len, cp_err {
+      // good/bad-CRC frames always have body 64-1518 (padded + FCS)
+      ignore_bins i_good_low = binsof(cp_err) intersect {ERR_NONE, ERR_BAD_CRC} &&
+                               binsof(cp_len) intersect {[0:63]};
+      ignore_bins i_good_over = binsof(cp_err) intersect {ERR_NONE, ERR_BAD_CRC} &&
+                                binsof(cp_len) intersect {[1519:$]};
+
+      // runts are < 64 bytes on the wire by definition
+      ignore_bins i_runt_big = binsof(cp_err) intersect {ERR_RUNT} &&
+                               binsof(cp_len) intersect {[64:$]};
+
+      // oversize is > 1518 bytes on the wire
+      ignore_bins i_over_small = binsof(cp_err) intersect {ERR_OVERSIZE} &&
+                                 binsof(cp_len) intersect {[0:1518]};
+
+      // truncated frames have no SFD so body_len is always 0
+      ignore_bins i_trunc_nz = binsof(cp_err) intersect {ERR_TRUNC} &&
+                               binsof(cp_len) intersect {[1:$]};
+    }
+
     x_bp_err : cross cp_bp, cp_err;
   endgroup
 
