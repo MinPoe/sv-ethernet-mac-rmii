@@ -27,7 +27,7 @@ module tx_ctrl (
   localparam logic [31:0] CRC_XOR = 32'hFFFF_FFFF;
   localparam int PRE_LEN = 7; // preamble bytes (0x55)
   localparam int MIN_BODY = 60; // min frame before FCS (DA+SA+type+payload)
-  localparam int IFG_CLKS = 48; // 96 bit times / 2 bits per clock
+  localparam int IFG_CLKS = 51; // 96 bit times on pins (48 clocks + 3 for rmii_tx pipeline)
 
   typedef enum logic [2:0] {
     S_IDLE, S_PRE, S_SFD, S_BODY, S_PAD, S_FCS, S_IFG

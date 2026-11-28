@@ -4,10 +4,10 @@ interface rmii_if (input logic clk);
   logic [1:0] rxd;
   logic       crs_dv;
 
-  // IFG: tx_en must stay low for at least 42 cycles after deassertion
-  // tx_ctrl enforces 48 clocks of IFG, minus rmii_tx pipeline ~= 44 on pins
+  // IFG: 96 bit times = 48 RMII clocks between frames
+  // $fell counts as cycle 1, |=> [*47] checks the next 47 = 48 total
   ap_tx_ifg : assert property (
-    @(posedge clk) $fell(tx_en) |=> !tx_en [*42]
+    @(posedge clk) $fell(tx_en) |=> !tx_en [*47]
   );
 endinterface
 

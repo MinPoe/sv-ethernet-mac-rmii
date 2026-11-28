@@ -48,7 +48,10 @@ MAC address) and read-only event counters over a simple write/read bus.
 
 ## Verification
 
-UVM testbench with 7 test classes, run on Verilator 5.054:
+UVM testbench with 7 test classes, run on Verilator 5.054. Each test runs
+over multiple seeds (`N_SEEDS`, default 5) via `+verilator+seed+N`. The
+regression script detects UVM errors in the report summary and exits non-zero
+on any failure.
 
 | Test | What it covers |
 |------|---------------|
@@ -57,18 +60,65 @@ UVM testbench with 7 test classes, run on Verilator 5.054:
 | `eth_rx_err_test` | Bad CRC, runt, oversize, truncated frames |
 | `eth_tx_rand_test` | 50 random TX frames |
 | `eth_tx_corner_test` | Directed: padding boundary, max payload |
-| `eth_rx_bp_test` | RX under 50% random and bursty backpressure |
+| `eth_rx_bp_test` | RX under 10%, 50% random and bursty backpressure |
 | `eth_full_test` | Simultaneous TX + RX traffic |
 
-All tests pass with 0 errors. Functional coverage (covergroup) at 76% across
-all tests.
+### SVA
+
+6 assertion properties in the interfaces (`tb/eth_ifs.sv`), checked on every
+test:
+
+- AXI-Stream tvalid hold, tdata/tlast/tuser stability while waiting for
+  tready, tlast only with tvalid (5 properties, checked on both TX input
+  and RX output interfaces)
+- RMII TX inter-frame gap (tx_en stays low for at least 42 cycles after
+  deassertion)
+
+### Coverage
+
+Functional coverage (covergroup) at 100% (55/55 bins) across all tests.
+The covergroup crosses RX frame error type, body length, and backpressure
+mode. 34 structurally impossible cross bins are excluded (e.g. a runt frame
+can't also be 1500 bytes).
+
+### Regression output
+
+```
+$ N_SEEDS=5 bash sim/run_all.sh
+
+--- eth_rx_rand_test (5 seeds) ---
+  all 5 seeds passed
+
+--- eth_rx_corner_test (5 seeds) ---
+  all 5 seeds passed
+
+--- eth_rx_err_test (5 seeds) ---
+  all 5 seeds passed
+
+--- eth_tx_rand_test (5 seeds) ---
+  all 5 seeds passed
+
+--- eth_tx_corner_test (5 seeds) ---
+  all 5 seeds passed
+
+--- eth_rx_bp_test (5 seeds) ---
+  all 5 seeds passed
+
+--- eth_full_test (5 seeds) ---
+  all 5 seeds passed
+
+=== Results: 35/35 passed, 0 failed (7 tests x 5 seeds) ===
+
+=== Merged Coverage ===
+  covergroup : 100.0% (   55/   55)
+```
 
 ### Testbench structure
 
 | File | Description |
 |------|-------------|
 | `tb/tb_top.sv` | Top module, clock/reset, DUT instantiation |
-| `tb/eth_ifs.sv` | Interfaces (rmii_if, axis_if, reg_if) |
+| `tb/eth_ifs.sv` | Interfaces with SVA (rmii_if, axis_if, reg_if) |
 | `tb/eth_pkg.sv` | Package, pulls in all .svh includes |
 | `tb/eth_types.svh` | Transaction classes (rx_frame, tx_frame, reg_item) |
 | `tb/eth_agents.svh` | UVM agents, drivers, monitors |
@@ -106,7 +156,7 @@ The RX frame buffers (8 x 2048 bytes) are inferred as M10K block RAM.
 export UVM_SRC=/path/to/uvm-core/src
 bash sim/build_verilator.sh              # builds + runs eth_rx_rand_test
 bash sim/build_verilator.sh eth_full_test 42  # specific test + seed
-bash sim/run_all.sh                      # all 7 tests, merged coverage report
+N_SEEDS=10 bash sim/run_all.sh           # all 7 tests x 10 seeds, merged coverage
 ```
 
 ### Synthesis
