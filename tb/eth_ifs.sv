@@ -3,6 +3,12 @@ interface rmii_if (input logic clk);
   logic       tx_en;
   logic [1:0] rxd;
   logic       crs_dv;
+
+  // IFG: tx_en must stay low for at least 42 cycles after deassertion
+  // tx_ctrl enforces 48 clocks of IFG, minus rmii_tx pipeline ~= 44 on pins
+  ap_tx_ifg : assert property (
+    @(posedge clk) $fell(tx_en) |=> !tx_en [*42]
+  );
 endinterface
 
 interface axis_if (input logic clk);
@@ -11,6 +17,29 @@ interface axis_if (input logic clk);
   logic       tready;
   logic       tlast;
   logic       tuser;
+
+  // AXI-Stream handshake: source must hold tvalid until accepted
+  ap_tvalid_hold : assert property (
+    @(posedge clk) (tvalid && !tready) |=> tvalid
+  );
+
+  // data, tlast, tuser must not change while waiting for tready
+  ap_tdata_stable : assert property (
+    @(posedge clk) (tvalid && !tready) |=> $stable(tdata)
+  );
+
+  ap_tlast_stable : assert property (
+    @(posedge clk) (tvalid && !tready) |=> $stable(tlast)
+  );
+
+  ap_tuser_stable : assert property (
+    @(posedge clk) (tvalid && !tready) |=> $stable(tuser)
+  );
+
+  // tlast only meaningful with tvalid
+  ap_tlast_with_valid : assert property (
+    @(posedge clk) tlast |-> tvalid
+  );
 endinterface
 
 interface reg_if (input logic clk);
